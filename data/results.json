@@ -1,0 +1,118 @@
+{
+  "config": {
+    "start": "2015-01-01",
+    "end": null,
+    "freq": "QE",
+    "max_weight": 0.25,
+    "model": null,
+    "cost_per_turnover": 0.001,
+    "universe": [
+      "AAPL",
+      "AMZN",
+      "BA",
+      "BAC",
+      "CAT",
+      "CVX",
+      "GOOGL",
+      "GS",
+      "JNJ",
+      "JPM",
+      "KO",
+      "LIN",
+      "MSFT",
+      "NEE",
+      "NVDA",
+      "PFE",
+      "PG",
+      "UNH",
+      "WMT",
+      "XOM"
+    ]
+  },
+  "stats": {
+    "equilibrium": {
+      "total_return": 4.983578335531114,
+      "cagr": 0.21158011226336093,
+      "volatility": 0.1819548689928306,
+      "sharpe": 1.1628164359355377,
+      "max_drawdown": -0.3471727410843365,
+      "avg_turnover": 0.02564102564102564,
+      "n_views": 0.0,
+      "tracking_error": 0.05575379732981986,
+      "information_ratio": 0.8660596201903098
+    },
+    "llm": {
+      "total_return": 4.750340537426976,
+      "cagr": 0.20642323468296864,
+      "volatility": 0.17960821608396627,
+      "sharpe": 1.14929728262802,
+      "max_drawdown": -0.3434144049396709,
+      "avg_turnover": 0.3980595827118867,
+      "n_views": 312.0,
+      "tracking_error": 0.06892346373338619,
+      "information_ratio": 0.6343089377965608
+    },
+    "shuffled": {
+      "total_return": 4.783757095330401,
+      "cagr": 0.20717340781917581,
+      "volatility": 0.17813133215207025,
+      "sharpe": 1.1630374360099234,
+      "max_drawdown": -0.3551659651337795,
+      "avg_turnover": 0.5353524375226311,
+      "n_views": 312.0,
+      "tracking_error": 0.06789032989422217,
+      "information_ratio": 0.6507250424932431
+    },
+    "minvar": {
+      "total_return": 2.1411356424582735,
+      "cagr": 0.13064771095071293,
+      "volatility": 0.15132305831404616,
+      "sharpe": 0.863369485168447,
+      "max_drawdown": -0.3348877802698458,
+      "avg_turnover": 0.2198393248030151,
+      "n_views": 0.0,
+      "tracking_error": 0.11802806495548607,
+      "information_ratio": -0.22345936053892218
+    },
+    "lstm": {
+      "total_return": 1.8749614659768064,
+      "cagr": 0.11995843084912727,
+      "volatility": 0.14876638489046076,
+      "sharpe": 0.8063544122380518,
+      "max_drawdown": -0.260033988387508,
+      "avg_turnover": 0.8632677682744002,
+      "n_views": 0.0,
+      "tracking_error": 0.11914650043010545,
+      "information_ratio": -0.3039579417579441
+    },
+    "equal": {
+      "total_return": 4.983578335531116,
+      "cagr": 0.21158011226336093,
+      "volatility": 0.18195486899283064,
+      "sharpe": 1.1628164359355373,
+      "max_drawdown": -0.3471727410843365,
+      "avg_turnover": 0.025641025641025647,
+      "n_views": 0.0,
+      "tracking_error": 0.055753797329819874,
+      "information_ratio": 0.8660596201903125
+    },
+    "SPY": {
+      "total_return": 2.7990768061508073,
+      "cagr": 0.15395184556027353,
+      "volatility": 0.18440474564782783,
+      "sharpe": 0.8348583710220094,
+      "max_drawdown": -0.3371725457219358,
+      "avg_turnover": NaN,
+      "n_views": 0.0,
+      "tracking_error": NaN,
+      "information_ratio": NaN
+    }
+  },
+  "views": {
+    "calls": 0,
+    "cached": 78,
+    "empty": 0,
+    "rejected": 0,
+    "raw": 0
+  }
+}

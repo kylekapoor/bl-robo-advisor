@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Cached market data and SEC filings -- large, and rebuildable from source.
+data/prices.parquet
+data/edgar/
+
+# Cached LLM views are kept: they are the record of what the model actually
+# said at each rebalance, and deleting them makes the backtest unreproducible.
+!data/views/
+
+.env
+.DS_Store
