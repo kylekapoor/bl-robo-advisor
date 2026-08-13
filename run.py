@@ -7,6 +7,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+import pandas as pd
+
 
 from advisor import backtest, filings, prices as px, views as views_mod
 
@@ -58,7 +60,8 @@ class CachedViews:
                       f"{batch.rejected[0][:90]}", flush=True)
             return batch
 
-        path.write_text(json.dumps({"views": [v.model_dump() for v in batch.views]}))
+        path.write_text(json.dumps({"views": [v.model_dump() for v in batch.views],
+                                    "model": batch.model}))
 
         if self.verbose:
             kept = ", ".join(
@@ -119,7 +122,18 @@ def cmd_backtest(args):
     bench = backtest.benchmark_equity(prices_df, results[0].equity)
     table = backtest.compare(results, bench)
 
-    print("\n" + table.to_string(float_format=lambda v: f"{v:8.3f}"))
+    print("\n=== full period ===")
+    print(table.to_string(float_format=lambda v: f"{v:8.3f}"))
+
+    holdout_table = None
+    if args.holdout_start:
+        held = [r.since(args.holdout_start) for r in results]
+        held_bench = bench.loc[bench.index >= pd.Timestamp(args.holdout_start)]
+        held_bench = held_bench / held_bench.iloc[0]
+        holdout_table = backtest.compare(held, held_bench)
+        print(f"\n=== held out, from {args.holdout_start} "
+              f"(never used to choose anything) ===")
+        print(holdout_table.to_string(float_format=lambda v: f"{v:8.3f}"))
 
     if provider:
         print(f"\nview generation: {provider.stats}")
@@ -133,6 +147,11 @@ def cmd_backtest(args):
             "universe": tickers,
         },
         "stats": {k: {m: float(x) for m, x in v.items()} for k, v in table.T.items()},
+        "holdout_start": args.holdout_start,
+        "holdout_stats": (
+            {k: {m: float(x) for m, x in v.items()} for k, v in holdout_table.T.items()}
+            if holdout_table is not None else None
+        ),
         "views": provider.stats if provider else None,
     }, indent=2))
     print(f"\nresults -> {RESULTS}")
@@ -160,6 +179,9 @@ def main():
     c.add_argument("--freq", default="QE")
     c.add_argument("--max-weight", type=float, default=0.25)
     c.add_argument("--model", default=None, help="pin one model; default walks MODEL_CHAIN")
+    c.add_argument("--holdout-start", default=None,
+                   help="report a second table measured only from this date, "
+                        "for evaluation on a window never used for tuning")
     c.set_defaults(func=cmd_backtest)
 
     args = p.parse_args()

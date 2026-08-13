@@ -59,6 +59,28 @@ class Result:
     def returns(self) -> pd.Series:
         return self.equity.pct_change().dropna()
 
+    def since(self, start) -> "Result":
+        """The same run, measured only from `start` onward.
+
+        The portfolio still walks forward continuously through the whole period;
+        this only changes the window the statistics are computed over. That is
+        what makes a held-out evaluation honest: the strategy is not restarted
+        with hindsight, it is simply scored on a stretch that was never used to
+        choose anything.
+        """
+        cut = pd.Timestamp(start)
+        equity = self.equity.loc[self.equity.index >= cut]
+        if equity.empty:
+            return self
+        return Result(
+            name=self.name,
+            equity=equity / equity.iloc[0],
+            weights=self.weights.loc[self.weights.index >= cut],
+            turnover=self.turnover.loc[self.turnover.index >= cut],
+            views_used=self.views_used,
+            vol_log=self.vol_log,
+        )
+
     def stats(self, benchmark: pd.Series | None = None) -> dict:
         r = self.returns
         years = len(r) / TRADING_DAYS
@@ -147,11 +169,22 @@ def _weights_for(
     if arm == "equilibrium":
         views = []
     elif arm == "shuffled" and views:
-        # Keep the magnitudes and confidences, destroy the asset mapping.
+        # Keep everything except which assets the view is *about*: same count,
+        # same magnitudes, same confidences, and crucially the same relative-vs-
+        # absolute structure. Collapsing relative views to absolute ones here
+        # would make the control a different kind of portfolio rather than the
+        # same portfolio with the information removed, and the comparison would
+        # no longer isolate the model's stock selection.
         rng = rng or np.random.default_rng(0)
-        shuffled_assets = list(rng.permutation(tickers))[: len(views)]
-        views = [v.model_copy(update={"asset": a, "versus": None})
-                 for v, a in zip(views, shuffled_assets)]
+        shuffled = []
+        for view in views:
+            if view.versus is not None:
+                a, b = rng.choice(tickers, size=2, replace=False)
+                shuffled.append(view.model_copy(update={"asset": str(a), "versus": str(b)}))
+            else:
+                a = rng.choice(tickers)
+                shuffled.append(view.model_copy(update={"asset": str(a)}))
+        views = shuffled
 
     P, Q, conf = bl.views_to_matrices(views, tickers)
     omega = bl.omega_from_confidence(cov, P, conf) if P is not None else None

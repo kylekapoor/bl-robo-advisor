@@ -202,7 +202,7 @@ def filing_text(filing: dict, max_chars: int = 3000) -> str:
 
 
 def evidence_by_ticker(
-    tickers, as_of: date, lookback_days: int = 130, per_ticker: int = 1, max_chars: int = 900
+    tickers, as_of: date, lookback_days: int = 130, per_ticker: int = 1, max_chars: int = 1400
 ) -> dict:
     """Dated evidence per ticker, strictly before `as_of`.
 

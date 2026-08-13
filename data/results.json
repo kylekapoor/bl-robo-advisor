@@ -42,26 +42,26 @@
       "information_ratio": 0.8660596201903098
     },
     "llm": {
-      "total_return": 4.750340537426976,
-      "cagr": 0.20642323468296864,
-      "volatility": 0.17960821608396627,
-      "sharpe": 1.14929728262802,
-      "max_drawdown": -0.3434144049396709,
-      "avg_turnover": 0.3980595827118867,
-      "n_views": 312.0,
-      "tracking_error": 0.06892346373338619,
-      "information_ratio": 0.6343089377965608
+      "total_return": 4.505854017033798,
+      "cagr": 0.2008131796721755,
+      "volatility": 0.17651794012088584,
+      "sharpe": 1.137636092595752,
+      "max_drawdown": -0.3322349127792342,
+      "avg_turnover": 0.462272060101445,
+      "n_views": 244.0,
+      "tracking_error": 0.06841572369431233,
+      "information_ratio": 0.5617926440328903
     },
     "shuffled": {
-      "total_return": 4.783757095330401,
-      "cagr": 0.20717340781917581,
-      "volatility": 0.17813133215207025,
-      "sharpe": 1.1630374360099234,
-      "max_drawdown": -0.3551659651337795,
-      "avg_turnover": 0.5353524375226311,
-      "n_views": 312.0,
-      "tracking_error": 0.06789032989422217,
-      "information_ratio": 0.6507250424932431
+      "total_return": 4.294211797874333,
+      "cagr": 0.19577421097799008,
+      "volatility": 0.1720900717136521,
+      "sharpe": 1.1376264128923546,
+      "max_drawdown": -0.34452065473186,
+      "avg_turnover": 0.6011921128248429,
+      "n_views": 244.0,
+      "tracking_error": 0.06774536369801203,
+      "information_ratio": 0.49325458782607673
     },
     "minvar": {
       "total_return": 2.1411356424582735,
@@ -108,11 +108,91 @@
       "information_ratio": NaN
     }
   },
+  "holdout_start": "2023-01-01",
+  "holdout_stats": {
+    "equilibrium": {
+      "total_return": 1.241944499791893,
+      "cagr": 0.2533316237404437,
+      "volatility": 0.12603272558525347,
+      "sharpe": 2.0100463793356615,
+      "max_drawdown": -0.16249101370571573,
+      "avg_turnover": 0.0,
+      "n_views": 0.0,
+      "tracking_error": 0.0652266913996815,
+      "information_ratio": 0.20813967881641546
+    },
+    "llm": {
+      "total_return": 1.0406691354810391,
+      "cagr": 0.22078746168157615,
+      "volatility": 0.12338805393537819,
+      "sharpe": 1.7893746974663267,
+      "max_drawdown": -0.15635950871602422,
+      "avg_turnover": 0.3216483249383735,
+      "n_views": 244.0,
+      "tracking_error": 0.07748009544521946,
+      "information_ratio": -0.1576794139536562
+    },
+    "shuffled": {
+      "total_return": 1.1278780612765602,
+      "cagr": 0.23515986601165983,
+      "volatility": 0.12087634264089799,
+      "sharpe": 1.945458150651346,
+      "max_drawdown": -0.1624085561799039,
+      "avg_turnover": 0.4704443629427101,
+      "n_views": 244.0,
+      "tracking_error": 0.07959189731688714,
+      "information_ratio": -0.015535646762188545
+    },
+    "minvar": {
+      "total_return": 0.542611679349982,
+      "cagr": 0.12889447756538264,
+      "volatility": 0.10795440784959034,
+      "sharpe": 1.1939714193510975,
+      "max_drawdown": -0.10632022072264313,
+      "avg_turnover": 0.15347055129124504,
+      "n_views": 0.0,
+      "tracking_error": 0.13551897684368402,
+      "information_ratio": -0.687404451729662
+    },
+    "lstm": {
+      "total_return": 0.3612531118417539,
+      "cagr": 0.09008726079865093,
+      "volatility": 0.11023809262034182,
+      "sharpe": 0.8172062728707578,
+      "max_drawdown": -0.14243604200441307,
+      "avg_turnover": 0.84871082796044,
+      "n_views": 0.0,
+      "tracking_error": 0.12968883786652904,
+      "information_ratio": -0.9925358313928129
+    },
+    "equal": {
+      "total_return": 1.241944499791892,
+      "cagr": 0.2533316237404435,
+      "volatility": 0.12603272558525352,
+      "sharpe": 2.010046379335659,
+      "max_drawdown": -0.16249101370571561,
+      "avg_turnover": 0.0,
+      "n_views": 0.0,
+      "tracking_error": 0.06522669139968144,
+      "information_ratio": 0.2081396788164123
+    },
+    "SPY": {
+      "total_return": 1.1235592767346065,
+      "cagr": 0.2344581983899594,
+      "volatility": 0.15120742948205665,
+      "sharpe": 1.5505732700639678,
+      "max_drawdown": -0.18755229425221798,
+      "avg_turnover": NaN,
+      "n_views": 0.0,
+      "tracking_error": NaN,
+      "information_ratio": NaN
+    }
+  },
   "views": {
-    "calls": 0,
-    "cached": 78,
+    "calls": 18,
+    "cached": 60,
     "empty": 0,
     "rejected": 0,
-    "raw": 0
+    "raw": 113
   }
 }
