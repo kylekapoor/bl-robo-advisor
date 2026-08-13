@@ -1,5 +1,7 @@
 # bl-robo-advisor
 
+[![tests](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml/badge.svg)](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml)
+
 Can an AI read company financial filings and pick better stocks?
 
 An LLM reads SEC filings and writes down opinions — *"Chevron will outperform
