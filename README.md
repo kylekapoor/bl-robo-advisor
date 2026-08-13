@@ -43,27 +43,22 @@ been meaningless. That is what the control is for.
 
 ## The result survived being attacked
 
-A first version produced only directional calls — 83% bullish, 1 relative view in
-312 — on 900 characters of filing text. That's a weak test: it measures "an LLM
-asked for bullish opinions", not "an LLM comparing peers".
+A first version asked only for directional calls — 83% bullish, 1 relative view
+in 312, on 900 characters. That tests "an LLM asked for bullish opinions", not
+"an LLM comparing peers".
 
-So it was rebuilt. Views are now **relative peer comparisons** (231 of 244, 95%),
-each citing a specific figure, on 1,400 characters of Management's Discussion and
-Analysis. Relative views are market-neutral by construction — "A beats B" is
-simultaneously a negative call on B — which removes the bullish-tilt confound
-entirely.
+Rebuilt: views are now **relative peer comparisons** (231 of 244), each citing a
+figure, on 1,400 characters of MD&A. Relative views are market-neutral by
+construction — "A beats B" is also a negative call on B — removing the bullish
+tilt entirely. **Better views, same conclusion.**
 
-Better views. Same conclusion.
+One trap: an intermediate run showed the LLM arm *winning*. It had failed 36 of
+39 quarters on rate limits, so the only quarters with views were the ones used
+for tuning and the holdout was empty — it was winning by being absent.
 
-One trap caught along the way: an intermediate run showed the LLM arm *winning*.
-It had failed on 36 of 39 quarters from rate limits, so the only quarters with
-views were the early ones used for tuning, and the holdout was empty — the arm
-was winning by being absent. The holdout existed to catch exactly that.
-
-**The LSTM did its job.** Volatility forecasting is not meant to raise returns; it
-is meant to improve risk estimates. Against its matched `minvar` control — same
-objective, same constraints, only the covariance differs — it cut max drawdown
-from −33.5% to −26.0% over the full period, at 4× the turnover.
+**The LSTM did its job.** Volatility forecasting isn't meant to raise returns,
+it's meant to improve risk estimates. Against its matched `minvar` control it cut
+max drawdown from −33.5% to −26.0%, at 4× the turnover.
 
 ## How it works
 
@@ -80,20 +75,19 @@ from −33.5% to −26.0% over the full period, at 4× the turnover.
 optimisation is self-inverting — `max_sharpe(δΣw, Σ)` returns `w` for any `Σ` —
 and market weights are equal weight here to avoid look-ahead bias.
 
-**Views are untrusted input.** Every one is checked against a Pydantic schema, a
-15% magnitude ceiling, a [0,1] confidence range, universe membership,
-self-reference and duplicates. Failures are dropped, and dropping everything is a
-supported outcome — Black-Litterman with no views returns the market portfolio,
-so every failure path degrades to "own the market".
+**Views are untrusted input** — checked against a Pydantic schema, a 15%
+magnitude ceiling, a [0,1] confidence range, universe membership, self-reference
+and duplicates. Dropping everything is a supported outcome: Black-Litterman with
+no views returns the market portfolio, so every failure path degrades to "own the
+market".
 
-**Point-in-time.** At each rebalance the model sees only filings whose EDGAR
-filing date is strictly earlier. What it cannot unlearn is its own training data,
-which is why the controls exist.
+**Point-in-time** — only filings dated strictly before each rebalance. What the
+model can't unlearn is its own training data, which is why the controls exist.
 
-**Volatility.** A Keras LSTM forecasts each asset's volatility and rebuilds the
-covariance as `D·R·D` — historical correlations, forecast variances. It predicts
-a *ratio* rather than a level, because a pooled model trained on levels returns
-near-identical volatility for every asset and throws away the cross-section.
+**Volatility** — a Keras LSTM rebuilds the covariance as `D·R·D`: historical
+correlations, forecast variances. It predicts a *ratio*, not a level, because a
+pooled model trained on levels returns near-identical volatility for every asset
+and throws away the cross-section.
 
 ## Usage
 
@@ -121,11 +115,8 @@ date, and the `llm` and `shuffled` arms must see identical views.
   legitimate `{"views": []}` results and never retried, silently turning the
   `llm` arm into the `equilibrium` arm.
 - **8-K filings yielded nothing usable** — the primary document is a cover page
-  that defers content to exhibits, so the model received XBRL tags. Switched to
-  10-Q/10-K, and section extraction now scores candidate passages for financial
-  narrative rather than taking the first or last heading match.
-- **A missing client timeout** stalled a 40-quarter run for ten minutes on a
-  single wedged request.
+  deferring content to exhibits, so the model got XBRL tags. Switched to 10-Q/10-K.
+- **A missing client timeout** stalled a 40-quarter run for ten minutes.
 
 ## Limits
 
