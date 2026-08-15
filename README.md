@@ -2,16 +2,17 @@
 
 [![tests](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml/badge.svg)](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml)
 
-Can an AI read company financial filings and pick better stocks?
+I tested whether an LLM can read company filings and pick better stocks. It
+cannot, and proving that took more work than getting a number that looked good.
 
-An LLM reads SEC filings and writes down opinions — *"Chevron will outperform
-Caterpillar by 3%, I'm 40% confident, because its filing reports X"*. A standard
-finance model (Black-Litterman) then decides how much those opinions should
-actually move the portfolio. **The LLM never picks a weight.**
+An LLM reads SEC filings and writes opinions: *"Chevron will outperform
+Caterpillar by 3%, confidence 40%, because its filing reports X."* Black-Litterman
+then decides how far those opinions move the portfolio. The LLM never picks a
+weight.
 
-The interesting part is the control: the same opinions are re-run with the
-company names randomly swapped. If the real opinions can't beat their own
-shuffle, they contain nothing.
+The control is the part I care about. I re-run the same opinions with the
+company names swapped at random. If the real ones cannot beat their own shuffle,
+they hold nothing.
 
 `Python` · `TensorFlow/Keras` · `Llama 3.3` · `Groq` · `yfinance` · `SEC EDGAR` · `NumPy` · `Pandas` · `SciPy` · `Pydantic`
 
@@ -20,76 +21,76 @@ shuffle, they contain nothing.
 ## Results
 
 Quarterly rebalance, 20 US large caps, 10 bps costs, 25% position cap, 244 LLM
-views across 39 quarters.
+views over 39 quarters.
 
-**Held out from 2023 — a window never used to tune anything:**
+Held out from 2023, a window I never used to tune anything:
 
 | Arm | CAGR | Sharpe | Max DD | Info ratio |
 |---|---|---|---|---|
 | equilibrium (no views) | **25.3%** | **2.010** | −16.2% | +0.21 |
-| **llm** | 22.1% | 1.789 | −15.6% | **−0.16** |
-| **shuffled** *(control)* | 23.5% | 1.945 | −16.2% | −0.02 |
+| llm | 22.1% | 1.789 | −15.6% | **−0.16** |
+| shuffled *(control)* | 23.5% | 1.945 | −16.2% | −0.02 |
 | minvar | 12.9% | 1.194 | −10.6% | −0.69 |
 | lstm | 9.0% | 0.817 | −14.2% | −0.99 |
-| SPY | 23.4% | 1.551 | −18.8% | — |
+| SPY | 23.4% | 1.551 | −18.8% | n/a |
 
-**The LLM's stock picks carry no signal.** On the holdout it loses to its own
-shuffle *and* to using no views at all. Over the full period its Sharpe ties the
-shuffle exactly, at 1.138.
+The LLM's stock picks hold no signal. On the holdout the `llm` arm loses to its
+own shuffle and to running with no views at all. Over the full period its Sharpe
+matches the shuffle to three decimals, 1.138 against 1.138.
 
-It is also expensive: the views drive 18× the turnover of the baseline (0.46 vs
-0.026), and at 10 bps a side that cost is most of the gap.
+The views also cost money. They drive 18x the baseline turnover, 0.46 against
+0.026, and at 10 bps a side that spending accounts for most of the gap.
 
-Reporting this arm against SPY alone would have shown apparent outperformance and
-been meaningless. That is what the control is for.
+Had I reported this arm against SPY alone it would have looked like
+outperformance. The control is why I know better.
 
 ## The result survived being attacked
 
-A first version asked only for directional calls — 83% bullish, 1 relative view
-in 312, on 900 characters. That tests "an LLM asked for bullish opinions", not
-"an LLM comparing peers".
+My first version asked for directional calls and got 83% bullish opinions with
+one relative view in 312, built on 900 characters of filing text. That tests an
+LLM asked for bullish opinions, not an LLM comparing companies.
 
-Rebuilt: views are now **relative peer comparisons** (231 of 244), each citing a
-figure, on 1,400 characters of MD&A. Relative views are market-neutral by
-construction — "A beats B" is also a negative call on B — removing the bullish
-tilt entirely. **Better views, same conclusion.**
+So I rebuilt it. Views are now relative comparisons between peers, 231 of 244 of
+them, each citing a figure, on 1,400 characters of MD&A. A relative view is
+market-neutral by construction, since "A beats B" also says something negative
+about B, which drops the bullish tilt. Better views, and the conclusion held.
 
-One trap: an intermediate run showed the LLM arm *winning*. It had failed 36 of
-39 quarters on rate limits, so the only quarters with views were the ones used
-for tuning and the holdout was empty — it was winning by being absent.
+One trap nearly caught me. An intermediate run showed the `llm` arm winning. It
+had failed 36 of 39 quarters on rate limits, leaving views only in the quarters I
+had tuned on and none in the holdout, so the arm was winning by not existing.
 
-**The LSTM did its job.** Volatility forecasting isn't meant to raise returns,
-it's meant to improve risk estimates. Against its matched `minvar` control it cut
-max drawdown from −33.5% to −26.0%, at 4× the turnover.
+The LSTM did the job I gave it. Volatility forecasting exists to sharpen risk
+estimates, not to raise returns. Against its matched `minvar` control it cut max
+drawdown from 33.5% to 26.0%, at 4x the turnover.
 
 ## How it works
 
 | Arm | What it is |
 |---|---|
-| `equilibrium` | Black-Litterman, no views. The market portfolio, optimised. |
-| `llm` | Same machinery, with the model's views applied. |
-| `shuffled` | **Control.** Real views, asset assignments permuted. Same count, magnitudes, confidences and relative structure — only the information is destroyed. |
+| `equilibrium` | Black-Litterman with no views. The market portfolio, optimised. |
+| `llm` | The same machinery with the model's views applied. |
+| `shuffled` | The control. Real views with asset assignments permuted, keeping count, magnitudes, confidences and relative structure, destroying only the information. |
 | `minvar` | Minimum variance on trailing covariance. |
-| `lstm` | **Matched pair with `minvar`.** Only the covariance differs, using forecast volatilities. |
+| `lstm` | Matched pair with `minvar`. Only the covariance differs, using forecast volatilities. |
 | `equal` | Naive 1/N. |
 
-`equilibrium` and `equal` are the *same portfolio*, not a coincidence: reverse
-optimisation is self-inverting — `max_sharpe(δΣw, Σ)` returns `w` for any `Σ` —
-and market weights are equal weight here to avoid look-ahead bias.
+`equilibrium` and `equal` produce the same portfolio, which is not a
+coincidence. Reverse optimisation inverts itself: `max_sharpe(δΣw, Σ)` returns
+`w` for any `Σ`, and I use equal weights as the market prior to dodge look-ahead
+bias.
 
-**Views are untrusted input** — checked against a Pydantic schema, a 15%
-magnitude ceiling, a [0,1] confidence range, universe membership, self-reference
-and duplicates. Dropping everything is a supported outcome: Black-Litterman with
-no views returns the market portfolio, so every failure path degrades to "own the
-market".
+I treat views as untrusted input and check each one against a Pydantic schema, a
+15% magnitude ceiling, a [0,1] confidence range, universe membership,
+self-reference and duplicates. Throwing all of them away is a supported outcome,
+since Black-Litterman with no views hands back the market portfolio.
 
-**Point-in-time** — only filings dated strictly before each rebalance. What the
-model can't unlearn is its own training data, which is why the controls exist.
+The model only sees filings dated before each rebalance. It cannot unlearn its
+own training data, which is why I built the controls.
 
-**Volatility** — a Keras LSTM rebuilds the covariance as `D·R·D`: historical
-correlations, forecast variances. It predicts a *ratio*, not a level, because a
-pooled model trained on levels returns near-identical volatility for every asset
-and throws away the cross-section.
+A Keras LSTM rebuilds the covariance as `D·R·D`, keeping historical correlations
+and replacing the variances. It predicts a ratio rather than a level, because a
+pooled model trained on levels hands back near-identical volatility for every
+asset and throws away the cross-section.
 
 ## Usage
 
@@ -103,28 +104,29 @@ export GROQ_API_KEY=...        # free tier: console.groq.com/keys
 ./.venv/bin/python test_advisor.py                     # 35 checks, no network
 ```
 
-Groq allows 100,000 tokens/day per model and a 39-quarter run exhausts that, so
-`views.MODEL_CHAIN` falls through to the next model when a daily budget runs out.
-Cached views are committed — they are the record of what the model said on each
-date, and the `llm` and `shuffled` arms must see identical views.
+Groq allows 100,000 tokens a day per model and a 39-quarter run burns through
+that, so `views.MODEL_CHAIN` moves to the next model when a budget runs out. I
+commit the cached views, since they record what the model said on each date and
+the `llm` and `shuffled` arms have to see the same ones.
 
 ## Bugs worth recording
 
-- **The `lstm` arm was a no-op.** It applied the forecast covariance through
-  `max_sharpe(δΣw, Σ)`, which returns `w` for *any* `Σ` — the covariance cancels
-  algebraically. Three arms came back byte-identical, which gave it away.
-- **The view cache poisoned itself.** Rate-limit failures were stored as
-  legitimate `{"views": []}` results and never retried, silently turning the
-  `llm` arm into the `equilibrium` arm.
-- **8-K filings yielded nothing usable** — the primary document is a cover page
-  deferring content to exhibits, so the model got XBRL tags. Switched to 10-Q/10-K.
+- **The `lstm` arm did nothing.** It ran the forecast covariance through
+  `max_sharpe(δΣw, Σ)`, which returns `w` for any `Σ`, so the covariance
+  cancelled out. Three arms came back byte-identical, which gave it away.
+- **The view cache poisoned itself.** Rate-limit failures got stored as real
+  `{"views": []}` results and never retried, which turned the `llm` arm into the
+  `equilibrium` arm without any error.
+- **8-K filings gave me nothing.** The primary document is a cover page that
+  defers to exhibits, so the model received XBRL tags. I switched to 10-Q/10-K.
 - **A missing client timeout** stalled a 40-quarter run for ten minutes.
 
 ## Limits
 
-- The model's training data postdates the backtest. Unfixable; hence the controls.
-- Equal-weight equilibrium prior, because yfinance only exposes *current* market
-  cap and weighting a 2016 portfolio by 2026 caps is the exact look-ahead this
-  project avoids.
-- 20 liquid US large caps. Nothing here says anything about small caps or
-  illiquid names.
+- The model's training data postdates the backtest. I cannot fix that, hence the
+  controls.
+- The equilibrium prior uses equal weights, because yfinance exposes only current
+  market cap and weighting a 2016 portfolio by 2026 caps is the look-ahead this
+  project exists to avoid.
+- 20 liquid US large caps. Nothing here says anything about small caps or thin
+  names.
