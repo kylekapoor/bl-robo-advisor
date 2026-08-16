@@ -48,20 +48,16 @@ TOP_K = 3
 SEPARATORS = [". ", "; ", ", ", " ", ""]
 
 
-class EmbeddingsUnavailable(RuntimeError):
-    """Raised when the embedding model cannot be loaded."""
-
-
 @lru_cache(maxsize=1)
 def _default_embeddings():
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
     except ImportError as exc:  # pragma: no cover - dependency missing
-        raise EmbeddingsUnavailable(f"langchain-huggingface not installed: {exc}") from exc
+        raise RuntimeError(f"langchain-huggingface not installed: {exc}") from exc
     try:
         return HuggingFaceEmbeddings(model_name=MODEL_NAME)
     except Exception as exc:  # pragma: no cover - download or torch failure
-        raise EmbeddingsUnavailable(f"could not load {MODEL_NAME}: {exc}") from exc
+        raise RuntimeError(f"could not load {MODEL_NAME}: {exc}") from exc
 
 
 @lru_cache(maxsize=1)
