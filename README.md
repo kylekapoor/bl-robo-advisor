@@ -95,8 +95,10 @@ asset and throws away the cross-section.
 ## Usage
 
 ```bash
+brew install ollama && ollama serve      # or the installer from ollama.com
+ollama pull llama3.1:8b
+
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
-export GROQ_API_KEY=...        # free tier: console.groq.com/keys
 
 ./.venv/bin/python run.py views --date 2026-06-30      # inspect one quarter
 ./.venv/bin/python run.py backtest --start 2015-01-01 \
