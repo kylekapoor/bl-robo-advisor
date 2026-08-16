@@ -109,28 +109,34 @@ Rules:
 def client(base_url: str | None = None, api_key: str | None = None) -> OpenAI:
     """OpenAI-compatible client.
 
-    Groq by default. Point OPENAI_BASE_URL at http://localhost:11434/v1 to run
-    the whole thing against Ollama instead -- same wire format, no code change.
+    Local Ollama by default. Point OPENAI_BASE_URL at a hosted provider to swap,
+    since the wire format is the same either way.
     """
-    base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1")
-    api_key = api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY") or "ollama"
+    base_url = base_url or os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
+    # Ollama ignores the key and the OpenAI client insists on one.
+    api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or "ollama"
     # The SDK defaults to a 600 s timeout with its own retries on top. A single
     # wedged request then stalls a 40-rebalance backtest for ten minutes with no
     # output and no error -- which is exactly what happened. Fail fast instead;
     # the caller already treats a failed call as "no views", which is safe.
-    return OpenAI(base_url=base_url, api_key=api_key, timeout=45.0, max_retries=1)
+    return OpenAI(base_url=base_url, api_key=api_key, timeout=180.0, max_retries=1)
 
 
-# Tried in order, best first. Each model carries its own daily token budget on
-# Groq's free tier, and the strongest one is also the smallest: 100,000 tokens
-# per day for llama-3.3-70b, which a 38-quarter backtest exhausts in a single
-# afternoon. Rather than fail the run, walk down the chain -- a weaker model
-# producing schema-validated views beats no views at all, and every view is
-# bounds-checked before it can touch the portfolio regardless of who wrote it.
+# Tried in order. This ran on Groq's free tier until Groq decommissioned the
+# model at the head of the chain with two days' notice, on top of a 100,000
+# token daily cap that a 39-quarter backtest exhausts in one afternoon. Local
+# inference has no key, no quota and nothing to deprecate, and anyone cloning
+# this repo can reproduce the backtest without an account.
+#
+# The fallback still matters. A weaker model producing schema-validated views
+# beats no views, and every view is bounds-checked before it reaches the
+# portfolio regardless of which model wrote it.
+# One model by default. The chain only earns its keep against a hosted provider
+# with per-day caps, which is what it was built for; local inference has no
+# budget to fall through. Set VIEW_MODELS to a comma-separated list to restore
+# the failover.
 MODEL_CHAIN = [
-    "llama-3.3-70b-versatile",
-    "openai/gpt-oss-120b",
-    "llama-3.1-8b-instant",
+    m.strip() for m in os.getenv("VIEW_MODELS", "llama3.1:8b").split(",") if m.strip()
 ]
 # Bounding the response matters for more than cost: without it some providers
 # reserve the model's full output window against the per-minute budget.

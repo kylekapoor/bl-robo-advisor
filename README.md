@@ -14,7 +14,7 @@ The control is the part I care about. I re-run the same opinions with the
 company names swapped at random. If the real ones cannot beat their own shuffle,
 they hold nothing.
 
-`Python` · `TensorFlow/Keras` · `Llama 3.3` · `Groq` · `yfinance` · `SEC EDGAR` · `NumPy` · `Pandas` · `SciPy` · `Pydantic`
+`Python` · `TensorFlow/Keras` · `Ollama` · `Llama 3.1` · `yfinance` · `SEC EDGAR` · `NumPy` · `Pandas` · `SciPy` · `Pydantic`
 
 ---
 
@@ -104,10 +104,16 @@ export GROQ_API_KEY=...        # free tier: console.groq.com/keys
 ./.venv/bin/python test_advisor.py                     # 35 checks, no network
 ```
 
-Groq allows 100,000 tokens a day per model and a 39-quarter run burns through
-that, so `views.MODEL_CHAIN` moves to the next model when a budget runs out. I
-commit the cached views, since they record what the model said on each date and
-the `llm` and `shuffled` arms have to see the same ones.
+Views come from a local Llama 3.1 through Ollama, so the backtest needs no API
+key and no account. This ran on Groq's free tier until Groq decommissioned the
+model at the head of my chain with two days' notice, on top of a 100,000 token
+daily cap that one 39-quarter run exhausts in an afternoon.
+
+The committed views under `data/views/` are the ones the results above were
+built from, generated on the hosted models before the move. They stay committed
+because they record what the model said on each date, and because the `llm` and
+`shuffled` arms have to see identical views for the comparison to hold. Re-run
+locally and you will get different views and different numbers.
 
 ## Bugs worth recording
 
@@ -120,6 +126,8 @@ the `llm` and `shuffled` arms have to see the same ones.
 - **8-K filings gave me nothing.** The primary document is a cover page that
   defers to exhibits, so the model received XBRL tags. I switched to 10-Q/10-K.
 - **A missing client timeout** stalled a 40-quarter run for ten minutes.
+- **The provider deprecated my model.** Two days' notice, mid-project. Local
+  inference has no key, no quota and nothing to deprecate.
 
 ## Limits
 
