@@ -9,10 +9,18 @@ quietly ignoring its views, so each property is pinned down separately.
 """
 from __future__ import annotations
 
+import json
+from datetime import date
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from langchain_core.embeddings import Embeddings
 
-from advisor import backtest, blacklitterman as bl, optimise, prices as px, volatility
+from advisor import (
+    backtest, blacklitterman as bl, filings, optimise, prices as px, retrieval,
+    volatility,
+)
 from advisor.views import MAX_ABS_VIEW_RETURN, View, validate
 
 TICKERS = ["AAA", "BBB", "CCC", "DDD"]
@@ -398,6 +406,190 @@ def test_api_failures_are_distinguished_from_an_empty_opinion():
 
     schema_reject = ViewBatch(views=[], raw_count=2, rejected=["schema: bad field"])
     assert not schema_reject.errored, "a rejected view is not an API failure"
+
+
+class _StubEmbeddings(Embeddings):
+    """Two-dimensional embeddings that rank marked chunks first.
+
+    Real MiniLM weights are a download and a torch import. Everything worth
+    testing here -- ordering, chunk handling, cache keying -- is independent of
+    which embedding model produced the vectors.
+    """
+
+    MARKER = "ZZMARKER"
+
+    def embed_documents(self, texts):
+        return [[1.0, 0.0] if self.MARKER in t else [0.0, 1.0] for t in texts]
+
+    def embed_query(self, text):
+        return [1.0, 0.0]
+
+
+def _marked_document(n_sentences: int = 60, marked=(4, 22, 47)) -> str:
+    parts = []
+    for i in range(n_sentences):
+        tag = f" {_StubEmbeddings.MARKER}" if i in marked else ""
+        parts.append(f"Sentence {i:03d} about the quarter and its results{tag}")
+    return ". ".join(parts)
+
+
+def test_retrieved_passages_come_back_in_document_order():
+    """Ranked order would interleave page 40 with page 6 and read as one passage.
+
+    The model receives the excerpt as continuous prose, so passages have to
+    appear in the order the filing puts them, not the order the retriever
+    scored them.
+    """
+    text = _marked_document()
+    out = retrieval.retrieve(text, max_chars=100_000, k=3,
+                             embeddings=_StubEmbeddings())
+
+    segments = [s for s in out.split(" ... ") if s.strip()]
+    assert len(segments) >= 2, f"expected several passages, got {segments!r}"
+
+    positions = [text.index(s.strip()[:40]) for s in segments]
+    assert positions == sorted(positions), f"passages out of document order: {positions}"
+
+
+def test_retrieval_actually_uses_relevance():
+    """A retriever that ignored the query would be a truncation with extra steps."""
+    text = _marked_document()
+    out = retrieval.retrieve(text, max_chars=100_000, k=3,
+                             embeddings=_StubEmbeddings())
+    assert _StubEmbeddings.MARKER in out, "relevant chunks were not selected"
+
+
+def test_short_documents_skip_the_vector_store():
+    """Fewer chunks than k means every chunk is returned, with no model needed."""
+    assert retrieval.retrieve("", embeddings=None) == ""
+    assert retrieval.retrieve("   ", embeddings=None) == ""
+    short = "One short sentence about revenue"
+    assert short in retrieval.retrieve(short, embeddings=None)
+
+
+def test_changing_the_query_invalidates_cached_excerpts():
+    """Otherwise one backtest silently mixes two retrieval schemes."""
+    import tempfile
+
+    original = retrieval.QUERY
+    try:
+        before = retrieval.config_fingerprint()
+        retrieval.QUERY = original + " and inventory levels"
+        after = retrieval.config_fingerprint()
+        assert before != after, "fingerprint ignored a query change"
+
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d) / "0000320193_x.txt"
+            retrieval.QUERY = original
+            retrieval.retrieve_cached("a short filing", base, max_chars=500)
+            stale = list(Path(d).glob("*.rag"))
+            assert len(stale) == 1, stale
+            assert retrieval.config_fingerprint() in stale[0].name
+    finally:
+        retrieval.QUERY = original
+
+
+def test_evidence_never_includes_a_filing_published_after_the_rebalance():
+    """Look-ahead bias dressed up as research. The filter is the whole point."""
+    as_of = date(2024, 6, 30)
+    rows = [
+        {"form": "10-Q", "filed": date(2024, 7, 15), "cik": 1, "accession": "future",
+         "document": "d.htm"},
+        {"form": "10-Q", "filed": date(2024, 5, 2), "cik": 1, "accession": "past",
+         "document": "d.htm"},
+    ]
+    original = (filings.ticker_to_cik, filings.recent_filings, filings.filing_text)
+    try:
+        filings.ticker_to_cik = lambda tickers: {t: 1 for t in tickers}
+        filings.recent_filings = lambda cik, **kw: rows
+        filings.filing_text = lambda f, **kw: f"body of {f['accession']}"
+
+        evidence = filings.evidence_by_ticker(["AAPL"], as_of=as_of)
+        assert "past" in evidence["AAPL"]
+        assert "future" not in evidence["AAPL"], "used a filing from after the rebalance"
+    finally:
+        filings.ticker_to_cik, filings.recent_filings, filings.filing_text = original
+
+
+def test_thin_filing_history_follows_the_predecessor_cik():
+    """A reorganisation moves the ticker and leaves the history behind.
+
+    XOM is the live case: the ticker points at a holding company with one 10-Q
+    while twenty years sit under the old CIK. Without this the stock silently
+    contributes no evidence for the entire backtest.
+    """
+    import tempfile
+
+    holding, predecessor = 2115436, 34088
+
+    def submissions(rows):
+        return json.dumps({"filings": {"recent": {
+            "form": [r[0] for r in rows],
+            "filingDate": [r[1] for r in rows],
+            "accessionNumber": [r[2] for r in rows],
+            "primaryDocument": ["x.htm"] * len(rows),
+        }, "files": []}})
+
+    real_cache, real_get = filings.CACHE, filings._get
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            filings.CACHE = Path(d)
+            # The holding company has one filing, and its accession number
+            # carries the old entity's CIK.
+            (Path(d) / f"submissions_{holding}.json").write_text(submissions(
+                [("10-Q", "2026-08-03", "0000034088-26-000093")]
+            ))
+            (Path(d) / f"submissions_{predecessor}.json").write_text(submissions(
+                [("10-Q", f"20{y:02d}-05-01", f"0000034088-{y:02d}-000001")
+                 for y in range(10, 26)]
+            ))
+
+            def no_network(url):
+                raise AssertionError(f"unexpected fetch: {url}")
+
+            filings._get = no_network
+            out = filings.recent_filings(holding)
+
+        assert len(out) == 17, f"expected merged history, got {len(out)}"
+        assert out[0]["filed"] == date(2026, 8, 3), "not sorted newest first"
+        assert any(f["cik"] == predecessor for f in out), "old CIK never reached"
+    finally:
+        filings.CACHE, filings._get = real_cache, real_get
+
+
+def test_a_healthy_cik_does_not_chase_its_filing_agent():
+    """Accession prefixes name filing agents too, so following must stay gated.
+
+    JPM, KO and BA all carry an agent's CIK in their accession numbers. Chasing
+    it on a company that already has full history would merge in a stranger.
+    """
+    import tempfile
+
+    company = 19617
+    real_cache, real_get = filings.CACHE, filings._get
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            filings.CACHE = Path(d)
+            (Path(d) / f"submissions_{company}.json").write_text(json.dumps(
+                {"filings": {"recent": {
+                    "form": ["10-Q"] * 30,
+                    "filingDate": [f"20{y:02d}-05-01" for y in range(10, 40)],
+                    "accessionNumber": [f"0001628280-{y:02d}-000001"
+                                        for y in range(10, 40)],
+                    "primaryDocument": ["x.htm"] * 30,
+                }, "files": []}}
+            ))
+
+            def no_network(url):
+                raise AssertionError(f"chased the filing agent: {url}")
+
+            filings._get = no_network
+            out = filings.recent_filings(company)
+
+        assert len(out) == 30
+        assert all(f["cik"] == company for f in out)
+    finally:
+        filings.CACHE, filings._get = real_cache, real_get
 
 
 if __name__ == "__main__":

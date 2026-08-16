@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +22,12 @@ jobs:
           python-version: "3.13"
           cache: pip
 
+      # TensorFlow and PyTorch in one environment, and the default torch wheel
+      # drags in the whole CUDA stack for a runner that has no GPU.
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
 
       - name: Run checks
         run: python test_advisor.py

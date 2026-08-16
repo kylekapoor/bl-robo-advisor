@@ -23,6 +23,8 @@ from pathlib import Path
 
 import requests
 
+from . import retrieval
+
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "data" / "edgar"
 
@@ -81,7 +83,14 @@ def _rows(block: dict, cik: int, forms, out: list) -> None:
         })
 
 
-def recent_filings(cik: int, forms=("10-Q", "10-K"), limit: int = 80) -> list:
+# A large cap with fewer periodic reports than this has not been public for
+# twenty years -- or, more often, has reorganised and left its history behind
+# under a different CIK.
+MIN_HISTORY = 20
+
+
+def recent_filings(cik: int, forms=("10-Q", "10-K"), limit: int = 80,
+                   follow_predecessor: bool = True) -> list:
     """Filing metadata for one company, newest first.
 
     The `recent` block holds only the last ~1000 filings, which for an active
@@ -89,6 +98,18 @@ def recent_filings(cik: int, forms=("10-Q", "10-K"), limit: int = 80) -> list:
     paginated files listed under `filings.files`, and skipping them silently
     yields zero evidence for early backtest dates -- which does not fail, it
     just quietly turns the LLM arm into the equilibrium arm.
+
+    Reorganisations do the same thing more sharply. `company_tickers.json` maps
+    a ticker to whichever entity holds it today, and when a company reincorporates
+    under a holding company the new entity takes the ticker while every past
+    filing stays with the old CIK. XOM is the live example: the ticker points at
+    ExxonMobil Holdings Corp and one 10-Q, while twenty years of Exxon Mobil Corp
+    sit under a CIK that now lists no ticker at all.
+
+    The accession number carries the filer's CIK in its first ten digits, so a
+    thin result can be repaired by following it. That is safe to attempt blindly:
+    filing agents appear in accession prefixes too, but they have no submissions
+    file of their own and 404.
     """
     CACHE.mkdir(parents=True, exist_ok=True)
     path = CACHE / f"submissions_{cik}.json"
@@ -108,6 +129,14 @@ def recent_filings(cik: int, forms=("10-Q", "10-K"), limit: int = 80) -> list:
                 continue
         _rows(json.loads(extra_path.read_text()), cik, forms, out)
 
+    if follow_predecessor and len(out) < MIN_HISTORY:
+        for predecessor in {int(f["accession"][:10]) for f in out} - {cik}:
+            try:
+                out.extend(recent_filings(predecessor, forms, limit,
+                                          follow_predecessor=False))
+            except requests.RequestException:
+                continue  # a filing agent, not a predecessor
+
     out.sort(key=lambda f: f["filed"], reverse=True)
     return out[:limit]
 
@@ -115,103 +144,44 @@ def recent_filings(cik: int, forms=("10-Q", "10-K"), limit: int = 80) -> list:
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
 
-# Where the actual content starts, best first. Everything before these markers is
-# inline-XBRL context tags and SEC cover-page boilerplate: hundreds of company
-# identifiers, note series and depositary-share descriptions carrying no
-# information whatsoever. Truncating from the top of the file returns pure noise,
-# and a correctly behaving model responds to it by producing no views at all.
-_BODY_MARKERS = [
-    re.compile(r"Management.{0,3}s Discussion and Analysis", re.I),
-    re.compile(r"Results of Operations", re.I),
-    re.compile(r"\bItem\s+\d\.\d\d\b"),
-    re.compile(r"\bItem\s+2\b", re.I),
-]
+def filing_text(filing: dict, max_chars: int = 2000) -> str:
+    """The passages of a filing most relevant to peer comparison.
 
-
-# Words that show up in actual financial narrative and essentially never in a
-# table of contents entry or a cross-reference.
-_SIGNAL = re.compile(
-    r"increase|decrease|compared to|primarily due|growth|margin|revenue|"
-    r"net sales|quarter|billion|million|%",
-    re.I,
-)
-
-
-def _score_passage(passage: str) -> int:
-    """How much this reads like narrative rather than navigation."""
-    return len(_SIGNAL.findall(passage[:3000]))
-
-
-def _extract_body(text: str) -> str:
-    """Jump to the passage that actually contains financial narrative.
-
-    Neither "first match" nor "last match" works. These headings appear in the
-    table of contents, in cross-references ("refer to Management's Discussion
-    and Analysis of this Form 10-Q"), and in the section itself. Taking the last
-    occurrence lands on whichever happens to come last, which for 2017-era
-    filings was a cross-reference buried in risk-factor boilerplate -- so the
-    model received navigation text, correctly concluded there was nothing to say,
-    and returned no views for years of the backtest.
-
-    So: score every candidate by how much financial vocabulary follows it, and
-    take the best. Cheap, and robust to filings that arrange themselves oddly.
+    The whole document is cached as text, then retrieval picks from it. Caching
+    the raw filing rather than the excerpt means a change to the retrieval
+    settings costs embedding time and not 780 more requests to EDGAR.
     """
-    fallback, fallback_score = None, -1
-
-    # Markers are tried in priority order and scoring happens *within* a marker,
-    # not across them. Ranking globally lets a high-scoring "Item 2. Unregistered
-    # Sales of Equity Securities" -- Part II share repurchases, dense with
-    # numbers -- outrank the MD&A it is supposed to lose to.
-    for marker in _BODY_MARKERS:
-        best, best_score = None, -1
-        for hit in marker.finditer(text):
-            passage = text[hit.start():]
-            if len(passage) < 500:
-                continue
-            score = _score_passage(passage)
-            if score > best_score:
-                best, best_score = passage, score
-        if best is not None and best_score >= 8:
-            return best
-        if best is not None and best_score > fallback_score:
-            fallback, fallback_score = best, best_score
-
-    # Require some real signal; otherwise the whole document is boilerplate and
-    # the caller is better off with its start than with a false lead.
-    return fallback if fallback is not None and fallback_score >= 5 else text
-
-
-def filing_text(filing: dict, max_chars: int = 3000) -> str:
-    """Plain text of a filing's primary document, cached whole, trimmed on read."""
     CACHE.mkdir(parents=True, exist_ok=True)
     path = CACHE / f"{filing['cik']}_{filing['accession']}.txt"
+
     if path.exists():
-        return _extract_body(path.read_text())[:max_chars]
+        text = path.read_text()
+    else:
+        url = ARCHIVE_URL.format(
+            cik=filing["cik"], accession=filing["accession"], document=filing["document"]
+        )
+        try:
+            html = _get(url).text
+        except requests.RequestException:
+            return ""
+        text = _WS.sub(" ", unescape(_TAG.sub(" ", html))).strip()
+        path.write_text(text)
 
-    url = ARCHIVE_URL.format(
-        cik=filing["cik"], accession=filing["accession"], document=filing["document"]
-    )
-    try:
-        html = _get(url).text
-    except requests.RequestException:
-        return ""
-
-    text = _WS.sub(" ", unescape(_TAG.sub(" ", html))).strip()
-    path.write_text(text)
-    return _extract_body(text)[:max_chars]
+    return retrieval.retrieve_cached(text, path, max_chars=max_chars)
 
 
 def evidence_by_ticker(
-    tickers, as_of: date, lookback_days: int = 130, per_ticker: int = 1, max_chars: int = 1400
+    tickers, as_of: date, lookback_days: int = 130, per_ticker: int = 1, max_chars: int = 2000
 ) -> dict:
     """Dated evidence per ticker, strictly before `as_of`.
 
     The `as_of` filter is the whole point. Feeding the model a filing published
     after the rebalance date would be look-ahead bias dressed up as research.
 
-    Kept deliberately short. Groq's free tier allows 12,000 tokens a minute, and
-    a full 8-K for twenty companies is several times that, so the caller chunks
-    this dict rather than sending it all at once.
+    The old limit here was 1,400 characters, sized against a hosted tokens-per-
+    minute ceiling rather than against what the model needed. Local inference
+    has no such ceiling, so the budget now goes to retrieval: three targeted
+    passages instead of one contiguous slice.
     """
     ciks = ticker_to_cik(tickers)
     out = {}

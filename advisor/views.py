@@ -212,7 +212,7 @@ def generate_chunked(
     tickers,
     chunk_size: int = 6,
     model: str | None = None,
-    pause: float = 6.0,
+    pause: float = 0.0,
     **kwargs,
 ) -> ViewBatch:
     """Generate views a few tickers at a time to stay inside the token budget.
@@ -222,12 +222,11 @@ def generate_chunked(
     anything anyway. Cross-sector relative views are lost, and that is an
     acceptable trade for staying on a free tier.
 
-    `pause` is sized against the tokens-per-minute ceiling, not latency. Groq's
-    free tier allows 12,000 tokens a minute; four chunks fired three seconds
-    apart put roughly 8,000 tokens into a twelve-second window, which trips the
-    limit, burns the entire retry ladder and stalls a rebalance for a quarter of
-    an hour while the quota sits idle. Spreading the same work across ~40
-    seconds costs nothing and never retries.
+    `pause` existed to stay under a hosted tokens-per-minute ceiling: four
+    chunks fired three seconds apart put roughly 8,000 tokens into a twelve
+    second window, tripped the limit, burned the retry ladder and stalled a
+    rebalance for a quarter of an hour. Local inference has no such quota, so it
+    now defaults to zero. Set it when pointing at a metered provider.
     """
     tickers = [t for t in tickers if t in evidence]
     all_views, raw, rejected, used_model = [], 0, [], None
