@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -101,6 +103,52 @@ def cmd_views(args):
         print(f"  REJECTED: {r}")
 
 
+class StaticViews:
+    """One fixed view set, replayed at every rebalance.
+
+    The `shuffled` control destroys which assets a view is about, so it removes
+    the model's stock selection *and* any persistent tilt at the same time. That
+    makes `llm` beating `shuffled` ambiguous: it is consistent with reading each
+    quarter's filings, and equally consistent with restating one ranking forever.
+
+    The views say the second is worth checking. Across 39 quarters there are
+    only 58 distinct pairs, and AMZN over BAC shows up in 82% of them. This arm
+    takes the most common opinions, at their median magnitude and confidence,
+    and applies them unchanged on every date -- so it holds the tilt and throws
+    away everything quarter-specific.
+
+    It is deliberately given hindsight, since the modal view set is computed
+    over the whole sample. That makes it a harder baseline than `llm` deserves,
+    which is the direction a control should err in.
+    """
+
+    def __init__(self, cache_dir: Path, n_views: int = 8):
+        counts: Counter = Counter()
+        returns, confidences = defaultdict(list), defaultdict(list)
+
+        for path in sorted(cache_dir.glob("*.json")):
+            for v in json.loads(path.read_text()).get("views", []):
+                key = (v["asset"], v.get("versus"))
+                counts[key] += 1
+                returns[key].append(v["expected_return"])
+                confidences[key].append(v["confidence"])
+
+        self.views = [
+            views_mod.View(
+                asset=asset, versus=versus,
+                expected_return=float(np.median(returns[(asset, versus)])),
+                confidence=float(np.median(confidences[(asset, versus)])),
+                rationale=f"modal view, seen in {n} of {len(list(cache_dir.glob('*.json')))} quarters",
+            )
+            for (asset, versus), n in counts.most_common(n_views)
+        ]
+        self.stats = {"static_views": len(self.views), "distinct_pairs": len(counts)}
+
+    def __call__(self, as_of, tickers):
+        return views_mod.ViewBatch(views=self.views, raw_count=len(self.views),
+                                   rejected=[])
+
+
 def cmd_backtest(args):
     prices_df = px.download(start=args.start, end=args.end)
     tickers = [c for c in prices_df.columns if c != px.BENCHMARK]
@@ -111,11 +159,23 @@ def cmd_backtest(args):
     if provider:
         print("generating views (cached per rebalance date):")
 
+    static = StaticViews(VIEW_CACHE) if "static" in args.arms else None
+    if static:
+        print(f"\nstatic control: {static.stats}")
+        for v in static.views:
+            print(f"  {v.asset}{'>' + v.versus if v.versus else ''} "
+                  f"{v.expected_return:+.1%} @{v.confidence:.2f}")
+
     results = []
     for arm in args.arms:
+        if arm == "static":
+            view_provider = static
+        elif arm in ("llm", "shuffled"):
+            view_provider = provider
+        else:
+            view_provider = None
         results.append(backtest.run(
-            prices_df, arm=arm, tickers=tickers,
-            view_provider=provider if arm in ("llm", "shuffled") else None,
+            prices_df, arm=arm, tickers=tickers, view_provider=view_provider,
             max_weight=args.max_weight, freq=args.freq,
         ))
 

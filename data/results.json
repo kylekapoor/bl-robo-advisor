@@ -42,26 +42,37 @@
       "information_ratio": 0.8660596201903098
     },
     "llm": {
-      "total_return": 4.505854017033798,
-      "cagr": 0.2008131796721755,
-      "volatility": 0.17651794012088584,
-      "sharpe": 1.137636092595752,
-      "max_drawdown": -0.3322349127792342,
-      "avg_turnover": 0.462272060101445,
-      "n_views": 244.0,
-      "tracking_error": 0.06841572369431233,
-      "information_ratio": 0.5617926440328903
+      "total_return": 4.865368660949244,
+      "cagr": 0.20898937967966158,
+      "volatility": 0.17222487073391302,
+      "sharpe": 1.2134680594566951,
+      "max_drawdown": -0.3185802093635455,
+      "avg_turnover": 0.457461436177252,
+      "n_views": 304.0,
+      "tracking_error": 0.06480747156040198,
+      "information_ratio": 0.6812200778489819
+    },
+    "static": {
+      "total_return": 4.079935713996349,
+      "cagr": 0.19048589196252896,
+      "volatility": 0.17269171438699735,
+      "sharpe": 1.1030401350678316,
+      "max_drawdown": -0.3494543520818657,
+      "avg_turnover": 0.09431164405223762,
+      "n_views": 312.0,
+      "tracking_error": 0.06192898849241512,
+      "information_ratio": 0.47043740354915303
     },
     "shuffled": {
-      "total_return": 4.294211797874333,
-      "cagr": 0.19577421097799008,
-      "volatility": 0.1720900717136521,
-      "sharpe": 1.1376264128923546,
-      "max_drawdown": -0.34452065473186,
-      "avg_turnover": 0.6011921128248429,
-      "n_views": 244.0,
-      "tracking_error": 0.06774536369801203,
-      "information_ratio": 0.49325458782607673
+      "total_return": 4.095936316853876,
+      "cagr": 0.19088759961211754,
+      "volatility": 0.17422436015557277,
+      "sharpe": 1.095642420162516,
+      "max_drawdown": -0.33821229984563095,
+      "avg_turnover": 0.645612223375174,
+      "n_views": 304.0,
+      "tracking_error": 0.07127155139147469,
+      "information_ratio": 0.4178609644687734
     },
     "minvar": {
       "total_return": 2.1411356424582735,
@@ -122,26 +133,37 @@
       "information_ratio": 0.20813967881641546
     },
     "llm": {
-      "total_return": 1.0406691354810391,
-      "cagr": 0.22078746168157615,
-      "volatility": 0.12338805393537819,
-      "sharpe": 1.7893746974663267,
-      "max_drawdown": -0.15635950871602422,
-      "avg_turnover": 0.3216483249383735,
-      "n_views": 244.0,
-      "tracking_error": 0.07748009544521946,
-      "information_ratio": -0.1576794139536562
+      "total_return": 1.2011957869912848,
+      "cagr": 0.24691813647301597,
+      "volatility": 0.12066356191261891,
+      "sharpe": 2.0463355511734935,
+      "max_drawdown": -0.16247346965990084,
+      "avg_turnover": 0.3726452526109618,
+      "n_views": 304.0,
+      "tracking_error": 0.07924853350784869,
+      "information_ratio": 0.09540958875092989
+    },
+    "static": {
+      "total_return": 1.0373674212871986,
+      "cagr": 0.2202347025546627,
+      "volatility": 0.11913951456098598,
+      "sharpe": 1.8485445686613688,
+      "max_drawdown": -0.1533982576746632,
+      "avg_turnover": 0.05288475856171669,
+      "n_views": 312.0,
+      "tracking_error": 0.07837442425688618,
+      "information_ratio": -0.17986568845903253
     },
     "shuffled": {
-      "total_return": 1.1278780612765602,
-      "cagr": 0.23515986601165983,
-      "volatility": 0.12087634264089799,
-      "sharpe": 1.945458150651346,
-      "max_drawdown": -0.1624085561799039,
-      "avg_turnover": 0.4704443629427101,
-      "n_views": 244.0,
-      "tracking_error": 0.07959189731688714,
-      "information_ratio": -0.015535646762188545
+      "total_return": 0.9736210071122873,
+      "cagr": 0.2094337805558506,
+      "volatility": 0.12061275961012648,
+      "sharpe": 1.7364147975125745,
+      "max_drawdown": -0.15963454839014224,
+      "avg_turnover": 0.5486930494961634,
+      "n_views": 304.0,
+      "tracking_error": 0.08553640346844678,
+      "information_ratio": -0.269883628521065
     },
     "minvar": {
       "total_return": 0.542611679349982,
@@ -189,10 +211,10 @@
     }
   },
   "views": {
-    "calls": 18,
-    "cached": 60,
+    "calls": 0,
+    "cached": 78,
     "empty": 0,
     "rejected": 0,
-    "raw": 113
+    "raw": 0
   }
 }
