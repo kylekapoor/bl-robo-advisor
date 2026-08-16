@@ -21,7 +21,9 @@ from advisor import (
     backtest, blacklitterman as bl, filings, optimise, prices as px, retrieval,
     volatility,
 )
-from advisor.views import MAX_ABS_VIEW_RETURN, View, validate
+from advisor.views import (
+    MAX_ABS_VIEW_RETURN, MAX_VIEWS_PER_REBALANCE, View, validate,
+)
 
 TICKERS = ["AAA", "BBB", "CCC", "DDD"]
 
@@ -406,6 +408,47 @@ def test_api_failures_are_distinguished_from_an_empty_opinion():
 
     schema_reject = ViewBatch(views=[], raw_count=2, rejected=["schema: bad field"])
     assert not schema_reject.errored, "a rejected view is not an API failure"
+
+
+def test_a_reversed_pair_is_the_same_comparison():
+    """"A beats B by 1%" and "B beats A by -1%" are one opinion, not two.
+
+    The model emits both, because chunking shows it the same pair from either
+    side. Keeping both entered one comparison into the posterior twice at double
+    the stated confidence.
+    """
+    batch = validate([
+        {"asset": "KO", "versus": "LIN", "expected_return": -0.01, "confidence": 0.3},
+        {"asset": "LIN", "versus": "KO", "expected_return": 0.015, "confidence": 0.4},
+    ], ["KO", "LIN"])
+
+    assert len(batch.views) == 1, f"kept both directions: {batch.views}"
+    assert any("duplicate" in r for r in batch.rejected)
+
+
+def test_an_absolute_view_does_not_collide_with_a_relative_one():
+    """Deduping on the pair must not swallow a genuine standalone opinion."""
+    batch = validate([
+        {"asset": "KO", "versus": "LIN", "expected_return": 0.01, "confidence": 0.3},
+        {"asset": "KO", "versus": None, "expected_return": 0.02, "confidence": 0.3},
+    ], ["KO", "LIN"])
+
+    assert len(batch.views) == 2, f"dropped a distinct view: {batch.views}"
+
+
+def test_views_dropped_by_the_cap_are_counted_as_rejected():
+    """A batch that discards fourteen of twenty-two did not reject 0% of them."""
+    raw = [
+        {"asset": a, "versus": "LIN", "expected_return": 0.01, "confidence": 0.3}
+        for a in ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "JPM", "BAC", "GS", "JNJ",
+                  "UNH", "PFE"]
+    ]
+    tickers = [v["asset"] for v in raw] + ["LIN"]
+    batch = validate(raw, tickers)
+
+    assert len(batch.views) == MAX_VIEWS_PER_REBALANCE
+    assert batch.rejection_rate > 0, "cap truncation reported as a clean batch"
+    assert len(batch.rejected) == len(raw) - MAX_VIEWS_PER_REBALANCE
 
 
 class _StubEmbeddings(Embeddings):

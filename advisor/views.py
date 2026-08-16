@@ -272,13 +272,26 @@ def validate(raw_views, tickers) -> ViewBatch:
             rejected.append(f"{view.asset} vs itself")
             continue
 
-        key = (view.asset, view.versus)
+        # "A beats B by 1%" and "B beats A by -1%" are one opinion written two
+        # ways, and the model does emit both: chunking means it sees the same
+        # pair from either side. Keying on the ordered pair let both through, so
+        # a single comparison entered the posterior twice and carried double the
+        # confidence it was given. Absolute views key on the asset alone.
+        key = (view.asset, None) if view.versus is None else frozenset(
+            (view.asset, view.versus)
+        )
         if key in seen:
-            rejected.append(f"duplicate {key}")
+            rejected.append(f"duplicate comparison {sorted(key) if view.versus else view.asset}")
             continue
 
         seen.add(key)
         kept.append(view)
+
+    # The cap is a real filter, so it is reported as one. Counting truncated
+    # views as neither kept nor rejected made the rejection rate read 0% on a
+    # batch that discarded fourteen of twenty-two.
+    for dropped in kept[MAX_VIEWS_PER_REBALANCE:]:
+        rejected.append(f"over the {MAX_VIEWS_PER_REBALANCE}-view cap: {dropped.asset}")
 
     return ViewBatch(
         views=kept[:MAX_VIEWS_PER_REBALANCE],
