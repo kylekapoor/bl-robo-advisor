@@ -3,17 +3,18 @@
 [![tests](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml/badge.svg)](https://github.com/kylekapoor/bl-robo-advisor/actions/workflows/tests.yml)
 
 I tested whether an LLM can read company filings and pick better stocks. After
-two rebuilds I still cannot show that it can, and the interesting part is how
-close the last version came to fooling me.
+two rebuilds I still cannot show that it can. This last version came close
+enough to fooling me that I had to build a second control to rule it out.
 
 An LLM reads SEC filings and writes opinions: *"Chevron will outperform
 Caterpillar by 3%, confidence 40%, because its filing reports X."* Black-Litterman
 then decides how far those opinions move the portfolio. The LLM never picks a
 weight.
 
-The controls are the part I care about. I re-run the same opinions with the
-company names swapped at random, and again with one fixed opinion set replayed
-every quarter. An arm that cannot beat both of those is not reading anything.
+The controls are the part I care about. I re-run the same opinions twice more:
+once with the company names swapped at random, and once with a single fixed
+opinion set replayed on every date. Beating both is the bar for saying the model
+read anything.
 
 `Python` · `LangChain` · `TensorFlow/Keras` · `Ollama` · `Llama 3.1` · `sentence-transformers` · `yfinance` · `SEC EDGAR` · `NumPy` · `Pandas` · `SciPy` · `Pydantic`
 
@@ -40,12 +41,10 @@ The `llm` arm now beats both controls on Sharpe, in the holdout and over the
 full period, which is the opposite of what the previous version of this project
 found. Before I upgraded retrieval, it lost to its own shuffle.
 
-That reads like a result. It is not one, and the reason is in the next section.
-
 ## The gaps do not clear the noise
 
-Point estimates are not findings. I bootstrapped the Sharpe difference on paired
-daily returns, resampling in 21-day blocks so the autocorrelation survives:
+I bootstrapped the Sharpe difference on paired daily returns, resampling in
+21-day blocks to preserve the autocorrelation:
 
 | Comparison | Full period | Holdout |
 |---|---|---|
@@ -53,17 +52,16 @@ daily returns, resampling in 21-day blocks so the autocorrelation survives:
 | llm − static | +0.092 [−0.017, +0.190] | +0.159 [−0.054, +0.380] |
 | llm − equilibrium | +0.042 [−0.095, +0.173] | +0.035 [−0.238, +0.332] |
 
-Every interval contains zero. Six comparisons all lean the same way, which is
-mildly encouraging, and 39 quarters is nowhere near enough to call any of them.
-The holdout llm-minus-shuffled interval misses by 0.011.
+Every interval contains zero. All six comparisons lean the same way, and 39
+quarters cannot separate any of them from chance. The holdout llm-minus-shuffled
+interval misses by 0.011.
 
-The views also lose on the two measures that do not reward taking less risk. The
-`llm` arm trails `equilibrium` on CAGR in both windows and on information ratio
-in both windows, at 14x the turnover. What it buys is slightly lower volatility,
-which flatters Sharpe.
+The views lose on the two measures that do not reward taking less risk. The
+`llm` arm trails `equilibrium` on CAGR and on information ratio in both windows,
+at 14x the turnover. It buys lower volatility, which flatters Sharpe.
 
-So the honest summary: better retrieval moved the point estimates from losing to
-winning, and produced no evidence I would act on.
+Better retrieval moved the point estimates from losing to winning. It did not
+give me evidence I would trade on.
 
 ## Why there are two controls
 
@@ -74,15 +72,15 @@ ranking forever.
 
 The views made that worth checking. Across 39 quarters there are 304 of them and
 only **58 distinct pairs**. AMZN over BAC appears in 82% of quarters, GOOGL over
-GS in 74%, and half of all views belong to a pair seen ten or more times. Chunking
-feeds the model a sector-ordered universe, so it compares the same peers every
-quarter and largely repeats itself.
+GS in 74%, and half of all views belong to a pair seen ten or more times. I chunk
+the universe in sector order, so the model compares the same peers every quarter
+and repeats itself.
 
 `static` takes the eight most common opinions at their median magnitude and
 confidence and applies them unchanged on every date. It keeps the tilt and throws
-away everything quarter-specific. It is deliberately given hindsight, since the
-modal set is computed over the whole sample, which makes it a harder baseline
-than the `llm` arm deserves.
+away everything quarter-specific. I compute the modal set over the whole sample,
+so this control runs on hindsight the `llm` arm never had. That makes it a harder
+baseline than `llm` deserves.
 
 `llm` beats `static` by +0.092 and +0.159 Sharpe, so the quarter-to-quarter
 content is doing something the fixed tilt is not. Both intervals still contain
@@ -92,24 +90,25 @@ zero.
 
 Evidence used to come from a hand-written passage scorer: jump to a heading like
 "Management's Discussion and Analysis", then rank candidates by counting
-financial vocabulary. It worked, and it broke in instructive ways, because that
-heading also appears in the table of contents and in cross-references.
+financial vocabulary. It worked until it did not: that heading also appears in
+the table of contents and in cross-references, so the scorer sometimes handed
+the model navigation text.
 
-Now the filing is chunked and retrieved by embedding similarity, which drops the
+Now I chunk the filing and retrieve by embedding similarity, which drops the
 heading problem instead of patching it. A contents entry does not resemble a
 sentence about margin compression, so it loses on cosine distance with no rule
 saying it should.
 
-The query matters more than the model did. My first one listed topics, including
-"material business risk", and it retrieved the risk-factor boilerplate that names
-those topics without reporting anything. Phrasing it as movement instead pulled
-back sentences carrying figures:
+Choosing the query took longer than choosing the model. My first one listed
+topics, including "material business risk", and it retrieved the risk-factor
+boilerplate that names those topics without reporting anything. Phrasing it as
+movement instead pulled back sentences carrying figures:
 
 > Noninterest revenue $18,852 / $17,638 / 7% ... Lower turnaround expenses
 > increased earnings by $10 million
 
-There is no fallback to the old scorer. Retrieval decides what the model sees, so
-degrading it quietly would change every number here while the run still looked
+I left no fallback to the old scorer. Retrieval decides what the model sees, so a
+silent downgrade would change every number here while the run still looked
 healthy.
 
 ## How it works
@@ -179,14 +178,14 @@ numbers.
   years of history sit under a CIK that lists no ticker at all. A thin result now
   follows the filer CIK embedded in the accession number back to the original
   entity.
-- **The rejection rate read 0% on a batch that discarded 14 of 22 views.** Views
-  dropped by the eight-view cap were counted as neither kept nor rejected.
+- **The rejection rate read 0% on a batch that discarded 14 of 22 views.** I
+  counted views dropped by the eight-view cap as neither kept nor rejected.
 - **The `lstm` arm did nothing.** It ran the forecast covariance through
   `max_sharpe(δΣw, Σ)`, which returns `w` for any `Σ`, so the covariance
   cancelled out. Three arms came back byte-identical, which gave it away.
-- **The view cache poisoned itself.** Rate-limit failures got stored as real
-  `{"views": []}` results and never retried, which turned the `llm` arm into the
-  `equilibrium` arm without any error.
+- **The view cache poisoned itself.** It stored rate-limit failures as real
+  `{"views": []}` results and never retried them, which turned the `llm` arm into
+  the `equilibrium` arm without raising anything.
 - **An intermediate run showed the `llm` arm winning.** It had failed 36 of 39
   quarters on rate limits, leaving views only in the quarters I had tuned on and
   none in the holdout, so the arm was winning by not existing.
@@ -195,10 +194,11 @@ numbers.
 
 ## Limits
 
-- 39 quarters cannot separate these arms. Everything above is reported with its
+- 39 quarters cannot separate these arms. I report every number above with its
   interval for that reason.
 - The model repeats itself. 304 views cover 58 distinct pairs, so the `llm` arm
-  is closer to a slowly-drifting tilt than to fresh quarterly analysis.
+  drifts between a handful of fixed opinions instead of doing fresh quarterly
+  analysis.
 - The model's training data postdates the backtest. I cannot fix that, hence the
   controls.
 - The equilibrium prior uses equal weights, because yfinance exposes only current
